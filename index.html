@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sky over Abu Dhabi · Mariam Alzaabi</title>
+<meta name="description" content="A live sky plot of the GPS, Galileo and BeiDou satellites over Abu Dhabi, or over you, plus the next ISS pass. By Mariam Alzaabi.">
+<link rel="canonical" href="https://sky.mariamalzaabi.ae/">
+<meta property="og:title" content="Sky over Abu Dhabi">
+<meta property="og:description" content="Live navigation satellites overhead, worked out in your browser from real orbit data.">
+<meta property="og:image" content="https://mariamalzaabi.ae/assets/og-en.jpg">
+<link rel="icon" type="image/svg+xml" href="https://mariamalzaabi.ae/assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Instrument layout: a big polar sky plot fills the screen, a narrow readout panel beside it (stacked on phones) */
+:root {
+  --bg: #070A18; --panel: rgba(18, 23, 52, 0.72); --ink: #EEF0FA; --muted: #A7ADCB; --line: rgba(120, 132, 190, 0.22);
+  --accent: #E9B467; --sat-a: #84A0FF; --sat-b: #4FD3BD; --sat-c: #F08AB3;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace; --display: "Bricolage Grotesque", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: radial-gradient(1100px 700px at 30% 40%, rgba(132, 160, 255, 0.08), transparent 70%), var(--bg); color: var(--ink); font: 15px/1.5 "Instrument Sans", system-ui, sans-serif; }
+.app { min-height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 340px; }
+@media (max-width: 900px) { .app { grid-template-columns: 1fr; } }
+.stage { position: relative; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-left, 0px)) 16px; min-width: 0; }
+canvas { width: min(calc(100vh - 40px), 100%); max-width: 100%; aspect-ratio: 1; display: block; }
+@media (max-width: 900px) { canvas { width: min(100%, 640px); } }
+.brand { position: absolute; top: max(16px, env(safe-area-inset-top, 0px)); left: max(18px, env(safe-area-inset-left, 0px)); display: grid; gap: 2px; }
+.brand a { color: var(--accent); text-decoration: none; font: 500 0.75rem var(--mono); }
+.brand h1 { margin: 0; font: 800 1.35rem var(--display); }
+.live { font: 500 0.7rem var(--mono); color: var(--sat-b); letter-spacing: 0.1em; }
+.live::before { content: "● "; animation: blink 1.6s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .live::before { animation: none; } }
+@media (max-width: 900px) { .brand { position: static; justify-self: start; margin-bottom: 8px; } }
+aside { border-left: 1px solid var(--line); background: var(--panel); padding: 22px 20px max(22px, env(safe-area-inset-bottom, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); display: grid; gap: 18px; align-content: start; min-width: 0; }
+@media (max-width: 900px) { aside { border-left: 0; border-top: 1px solid var(--line); padding-left: max(16px, env(safe-area-inset-left, 0px)); } }
+.label { font: 500 0.68rem var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.where { display: grid; gap: 8px; }
+.where b { font: 600 1.15rem var(--display); }
+.where .coords, .clock { font: 0.8rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+select, button { font: 500 0.8rem var(--mono); color: var(--ink); background: rgba(7, 10, 24, 0.6); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+button { cursor: pointer; }
+button:hover, select:hover { border-color: var(--accent); }
+button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row select { flex: 1; min-width: 0; }
+.big { display: flex; align-items: baseline; gap: 10px; }
+.big b { font: 800 3rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.big span { color: var(--muted); }
+.cons { display: grid; gap: 6px; }
+.cons label { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; cursor: pointer; font: 0.85rem var(--mono); }
+.cons input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.cons i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-inline-end: 8px; }
+.cons b { font-weight: 500; font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; font: 0.78rem var(--mono); font-variant-numeric: tabular-nums; }
+th { text-align: left; color: var(--muted); font-weight: 400; padding: 4px 0; border-bottom: 1px solid var(--line); }
+td { padding: 4px 0; border-bottom: 1px solid rgba(120, 132, 190, 0.08); }
+th:not(:first-child), td:not(:first-child) { text-align: right; }
+.tbl { max-height: 260px; overflow-y: auto; }
+.iss { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 4px; font-size: 0.9rem; }
+.iss b { color: var(--ink); }
+.iss p { margin: 0; color: var(--muted); }
+.note { margin: 0; color: var(--muted); font-size: 0.8rem; }
+.note a { color: var(--accent); }
+.err { color: var(--sat-c); font: 0.78rem var(--mono); margin: 0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <div class="brand"><a href="https://mariamalzaabi.ae/">← mariamalzaabi.ae</a><h1>Sky over <span id="placeTitle">Abu Dhabi</span></h1><span class="live" id="live">LIVE</span></div>
+    <canvas id="sky" role="img" aria-label="Live sky plot of navigation satellites"></canvas>
+  </div>
+  <aside>
+    <div class="where">
+      <span class="label">Observer</span>
+      <b id="place">Abu Dhabi</b>
+      <span class="coords" id="coords">24.4539° N, 54.3773° E</span>
+      <div class="row">
+        <select id="city" aria-label="Choose a city"></select>
+        <button type="button" id="locate">Use my location</button>
+      </div>
+      <p class="err" id="err" hidden></p>
+      <span class="clock" id="clock"></span>
+    </div>
+    <div>
+      <span class="label">In view now</span>
+      <div class="big"><b id="total">–</b><span>satellites above 10°</span></div>
+    </div>
+    <div class="cons" id="cons"></div>
+    <div class="iss" id="iss" hidden></div>
+    <div>
+      <span class="label">Highest overhead</span>
+      <div class="tbl"><table><thead><tr><th scope="col">SAT</th><th scope="col">AZ</th><th scope="col">EL</th></tr></thead><tbody id="list"></tbody></table></div>
+    </div>
+    <p class="note">Positions are worked out in your browser from public orbit data (CelesTrak), refreshed daily. Your location never leaves your device. Made by <a href="https://mariamalzaabi.ae/">Mariam Alzaabi</a>, a GNSS software engineer in Abu Dhabi.</p>
+  </aside>
+</div>
+<script>
+(function () {
+  var MU = 398600.4418, RE = 6378.137, J2 = 1.08263e-3, D2R = Math.PI / 180, MASK = 10;
+  var CITIES = [
+    ['Abu Dhabi', 24.4539, 54.3773], ['Dubai', 25.2048, 55.2708], ['Al Ain', 24.2075, 55.7447], ['Riyadh', 24.7136, 46.6753], ['Cairo', 30.0444, 31.2357],
+    ['London', 51.5072, -0.1276], ['Paris', 48.8566, 2.3522], ['New York', 40.7128, -74.006], ['Tokyo', 35.6762, 139.6503], ['Sydney', -33.8688, 151.2093],
+    ['Reykjavík', 64.1466, -21.9426], ['Nairobi', -1.2921, 36.8219], ['São Paulo', -23.5505, -46.6333]
+  ];
+  var CONS = [['a', 'G', 'GPS', 'USA'], ['b', 'E', 'Galileo', 'EU'], ['c', 'C', 'BeiDou', 'China']];
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var cv = document.getElementById('sky'), ctx = cv.getContext('2d'), $ = function (id) { return document.getElementById(id); };
+  var sats = [], show = { a: true, b: true, c: true }, obs = null, place = CITIES[0], tracks = [], issData = null;
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function observer(lat, lon) {
+    var f = 1 / 298.257223563, e2 = f * (2 - f), sl = Math.sin(lat * D2R), cl = Math.cos(lat * D2R), so = Math.sin(lon * D2R), co = Math.cos(lon * D2R);
+    var N = RE / Math.sqrt(1 - e2 * sl * sl);
+    return { x: N * cl * co, y: N * cl * so, z: N * (1 - e2) * sl, sl: sl, cl: cl, so: so, co: co };
+  }
+  // Kepler orbit with J2 drift of the node and perigee, then Earth-fixed and local east/north/up
+  function azel(o, ms, O) {
+    var n = o.n * 2 * Math.PI / 86400, a = Math.pow(MU / (n * n), 1 / 3), e = o.e, inc = o.i * D2R;
+    var dt = (ms - o.t) / 1000, p = a * (1 - e * e), k = 1.5 * n * J2 * Math.pow(RE / p, 2);
+    var raan = o.raan * D2R - k * Math.cos(inc) * dt, argp = o.argp * D2R + 0.5 * k * (5 * Math.cos(inc) * Math.cos(inc) - 1) * dt;
+    var M = (o.ma * D2R + n * dt) % (2 * Math.PI), E = M;
+    for (var it = 0; it < 8; it++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    var nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2)), rad = a * (1 - e * Math.cos(E));
+    var u = argp + nu, cO = Math.cos(raan), sO = Math.sin(raan), ci = Math.cos(inc), si = Math.sin(inc), cu = Math.cos(u), su = Math.sin(u);
+    var X = rad * (cO * cu - sO * su * ci), Y = rad * (sO * cu + cO * su * ci), Z = rad * su * si;
+    var g = ((280.46061837 + 360.98564736629 * (ms / 86400000 + 2440587.5 - 2451545)) % 360) * D2R, cg = Math.cos(g), sg = Math.sin(g);
+    var dx = cg * X + sg * Y - O.x, dy = -sg * X + cg * Y - O.y, dz = Z - O.z;
+    var east = -O.so * dx + O.co * dy, north = -O.sl * O.co * dx - O.sl * O.so * dy + O.cl * dz, up = O.cl * O.co * dx + O.cl * O.so * dy + O.sl * dz;
+    return [(Math.atan2(east, north) / D2R + 360) % 360, Math.atan2(up, Math.hypot(east, north)) / D2R];
+  }
+  function compute() {
+    var now = Date.now();
+    tracks = sats.map(function (s) {
+      var tr = []; for (var m = 90; m >= 0; m -= 3) tr.push(azel(s, now - m * 60000, obs));
+      return { s: s, tr: tr, now: tr[tr.length - 1] };
+    });
+    var count = { a: 0, b: 0, c: 0 }, total = 0, up = [];
+    tracks.forEach(function (T) { if (T.now[1] > MASK) { count[T.s.k]++; if (show[T.s.k]) { total++; up.push(T); } } });
+    $('total').textContent = total;
+    CONS.forEach(function (c) { $('n-' + c[0]).textContent = count[c[0]]; });
+    up.sort(function (x, y) { return y.now[1] - x.now[1]; });
+    var tb = $('list'); tb.innerHTML = '';
+    up.forEach(function (T) {
+      var tr = document.createElement('tr');
+      [T.s.id, T.now[0].toFixed(0) + '°', T.now[1].toFixed(1) + '°'].forEach(function (v, i) { var td = document.createElement('td'); td.textContent = v; if (!i) td.style.color = css('--sat-' + T.s.k); tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+    cv.setAttribute('aria-label', 'Live sky plot: ' + total + ' navigation satellites above 10 degrees over ' + place[0]);
+    draw();
+  }
+  function draw() {
+    var r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2), size = r.width;
+    if (!size) return;
+    if (cv.width !== Math.round(size * dpr)) { cv.width = cv.height = Math.round(size * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, size, size);
+    var R = size / 2 - 30, c = size / 2, fs = Math.max(10, Math.min(13, size / 50));
+    function pos(az, el) { var rr = R * (90 - el) / 90, a = (az - 90) * D2R; return [c + rr * Math.cos(a), c + rr * Math.sin(a)]; }
+    ctx.strokeStyle = css('--line'); ctx.lineWidth = 1;
+    [0, 30, 60].forEach(function (el) { ctx.beginPath(); ctx.arc(c, c, R * (90 - el) / 90, 0, 6.2832); ctx.stroke(); });
+    for (var a = 0; a < 360; a += 30) { var p = pos(a, 0); ctx.beginPath(); ctx.moveTo(c, c); ctx.lineTo(p[0], p[1]); ctx.stroke(); }
+    ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(c, c, R * (90 - MASK) / 90, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = css('--muted'); ctx.font = '500 ' + fs + 'px "JetBrains Mono", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    [['N', 0], ['E', 90], ['S', 180], ['W', 270]].forEach(function (d) { var p = pos(d[1], -9); ctx.fillText(d[0], p[0], p[1]); });
+    ctx.textAlign = 'left';
+    [30, 60].forEach(function (el) { var p = pos(45, el); ctx.fillText(el + '°', p[0] + 4, p[1]); });
+    var placed = [];
+    tracks.forEach(function (T) {
+      if (!show[T.s.k]) return;
+      var col = css('--sat-' + T.s.k), tr = T.tr;
+      ctx.strokeStyle = col; ctx.lineWidth = 1.6;
+      for (var k = 1; k < tr.length; k++) {
+        if (tr[k][1] < 0 || tr[k - 1][1] < 0) continue;
+        var p0 = pos(tr[k - 1][0], tr[k - 1][1]), p1 = pos(tr[k][0], tr[k][1]);
+        ctx.globalAlpha = k / tr.length * 0.55; ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      var now = T.now; if (now[1] < 0) return;
+      var p = pos(now[0], now[1]), low = now[1] < MASK;
+      ctx.globalAlpha = low ? 0.35 : 1; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p[0], p[1], low ? 3.5 : 5.5, 0, 6.2832); ctx.fill();
+      if (!low && !placed.some(function (q) { return Math.abs(q[0] - p[0]) < fs * 3 && Math.abs(q[1] - p[1]) < fs * 1.2; })) {
+        placed.push(p); ctx.fillStyle = css('--ink'); ctx.globalAlpha = 0.85; ctx.fillText(T.s.id, p[0] + 9, p[1] - 9);
+      }
+      ctx.globalAlpha = 1;
+    });
+    ctx.fillStyle = css('--accent'); ctx.beginPath(); ctx.arc(c, c, 5, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = css('--accent'); ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.arc(c, c, 13, 0, 6.2832); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  function setPlace(name, lat, lon) {
+    place = [name, lat, lon]; obs = observer(lat, lon);
+    $('place').textContent = name; $('placeTitle').textContent = name;
+    $('coords').textContent = Math.abs(lat).toFixed(4) + '° ' + (lat >= 0 ? 'N' : 'S') + ', ' + Math.abs(lon).toFixed(4) + '° ' + (lon >= 0 ? 'E' : 'W');
+    document.title = 'Sky over ' + name + ' · Mariam Alzaabi';
+    if (sats.length) compute();
+    showIss();
+  }
+  // controls
+  CITIES.forEach(function (c, i) { var o = document.createElement('option'); o.value = i; o.textContent = c[0]; $('city').appendChild(o); });
+  $('city').addEventListener('change', function () { var c = CITIES[this.value]; $('err').hidden = true; setPlace(c[0], c[1], c[2]); });
+  $('locate').addEventListener('click', function () {
+    var err = $('err');
+    if (!navigator.geolocation) { err.textContent = 'Your browser does not share location. Pick a city instead.'; err.hidden = false; return; }
+    this.textContent = 'Locating…';
+    var btn = this;
+    navigator.geolocation.getCurrentPosition(function (p) {
+      btn.textContent = 'Use my location'; err.hidden = true;
+      // rounded to about 1 km: plenty for a sky plot
+      setPlace('your location', Math.round(p.coords.latitude * 100) / 100, Math.round(p.coords.longitude * 100) / 100);
+      $('city').selectedIndex = -1;
+    }, function () { btn.textContent = 'Use my location'; err.textContent = 'Location was not shared. Pick a city instead.'; err.hidden = false; }, { timeout: 10000, maximumAge: 600000 });
+  });
+  CONS.forEach(function (c) {
+    var l = document.createElement('label');
+    l.innerHTML = '<input type="checkbox" checked id="f-' + c[0] + '"><span><i style="background:var(--sat-' + c[0] + ')"></i>' + c[2] + ' <span style="color:var(--muted)">' + c[3] + '</span></span><b id="n-' + c[0] + '">–</b>';
+    $('cons').appendChild(l);
+    l.querySelector('input').addEventListener('change', function () { show[c[0]] = this.checked; compute(); });
+  });
+  function tick() {
+    var d = new Date();
+    $('clock').textContent = 'UTC ' + d.toISOString().slice(11, 19) + ' · GPS week ' + Math.floor((d - Date.UTC(1980, 0, 6)) / 6048e5);
+  }
+  tick(); setInterval(tick, 1000);
+  // next ISS pass (computed for Abu Dhabi only)
+  function dir(az) { return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(az / 45) % 8]; }
+  function showIss() {
+    var box = $('iss');
+    if (!issData || place[0] !== 'Abu Dhabi') { box.hidden = true; return; }
+    var now = new Date(), next = null;
+    issData.passes.some(function (p) { if (new Date(p.end) > now && p.visible) { next = p; return true; } });
+    if (!next) { box.hidden = true; return; }
+    var t = new Date(next.start), opts = { timeZone: 'Asia/Dubai' };
+    box.innerHTML = '<span class="label">Next ISS sighting</span><b></b><p></p>';
+    box.querySelector('b').textContent = t.toLocaleDateString('en-GB', Object.assign({ weekday: 'long', day: 'numeric', month: 'long' }, opts)) + ', ' + t.toLocaleTimeString('en-US', Object.assign({ hour: 'numeric', minute: '2-digit' }, opts));
+    box.querySelector('p').textContent = 'Up to ' + next.maxEl + '° high, moving ' + dir(next.startAz) + ' to ' + dir(next.endAz) + '. Look for a bright, steady dot.';
+    box.hidden = false;
+  }
+  // data from the main site, refreshed daily by GitHub Actions there
+  setPlace(CITIES[0][0], CITIES[0][1], CITIES[0][2]);
+  fetch('https://mariamalzaabi.ae/assets/gnss.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (d) {
+    sats = d.sats.map(function (o) { o.t = Date.parse(o.epoch); o.k = { G: 'a', E: 'b', C: 'c' }[o.c] || 'a'; return o; });
+    compute(); setInterval(compute, reduce ? 60000 : 10000);
+  }).catch(function () { $('live').textContent = 'OFFLINE'; $('err').textContent = 'Could not load orbit data. Try again in a moment.'; $('err').hidden = false; });
+  fetch('https://mariamalzaabi.ae/assets/iss.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (d) { issData = d; showIss(); }).catch(function () {});
+  addEventListener('resize', draw);
+})();
+</script>
+</body>
+</html>
